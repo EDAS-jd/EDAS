@@ -70,13 +70,13 @@ $$
 Then a monotonicity-preserving clip:
 
 $$
-A_i^{\text{final}} = A_i^{\text{orig}} + \operatorname{sgn}(\Delta_i) \cdot \min\left(|\Delta_i|,\ \frac{|A_i^{\text{orig}}|}{\kappa}\right), \quad \kappa > 1
+A_i^{\text{final}} = A_i^{\text{orig}} + \mathrm{sgn}(\Delta_i) \cdot \min\left(|\Delta_i|,\ \frac{|A_i^{\text{orig}}|}{\kappa}\right), \quad \kappa > 1
 $$
 
 Properties:
 - **Bounded surprisal**: $T_i = (I_i - H)/\ln N_w \in [-1, 1]$.
 - **Zero-sum in Branch C**: $\sum_{i\in\mathcal{W}} T_i = 0$, so the arithmetic mean of advantages is preserved — EDAS does not bias the base estimator.
-- **No sign inversion**: $\kappa > 1 \Rightarrow \operatorname{sgn}(A_i^{\text{final}}) = \operatorname{sgn}(A_i^{\text{orig}})$.
+- **No sign inversion**: $\kappa > 1 \Rightarrow \mathrm{sgn}(A_i^{\text{final}}) = \mathrm{sgn}(A_i^{\text{orig}})$.
 
 ---
 
