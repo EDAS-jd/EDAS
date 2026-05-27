@@ -1,6 +1,6 @@
 # EDAS — Error Diversity Advantage Shaping for RLVR
 
-> Reference implementation of **EDAS** (Error Diversity Advantage Shaping) on top of [verl](https://github.com/verl-project/verl), adapted from the original [Easy-R1](https://github.com/hiyouga/EasyR1) prototype used in the paper.
+> Reference implementation of **EDAS** (Error Diversity Advantage Shaping) built on top of the [verl](https://github.com/verl-project/verl) RLHF / RLVR framework.
 >
 > 📄 **Paper:** *Leveraging Error Diversity in Group Rollouts for Reinforcement Learning* — [arXiv:2605.17333](https://arxiv.org/abs/2605.17333)
 
@@ -142,7 +142,7 @@ For code, $\mathcal{E}$ maps each failure to its Python exception type — the r
 
 ## 🛠 Implementation
 
-We port the original Easy-R1 prototype of EDAS to the [verl](https://github.com/verl-project/verl) framework, so it can be plugged into either **GRPO** or **DAPO** out of the box. The EDAS subroutine (three-branch advantage redistribution + κ-clip + warmup scheduling) is added as a post-hoc step right after group-relative advantage standardization, with the rest of the training pipeline untouched. Reward, LLM judge and jinja prompts are kept 1:1 with Easy-R1 to guarantee reward parity; vLLM rollout is wired through verl's async server with dynamic per-prompt `max_tokens`. Full per-file audit is in [`EDPO_MIGRATION.md`](EDPO_MIGRATION.md).
+We implement EDAS on top of the [verl](https://github.com/verl-project/verl) framework so it can be plugged into either **GRPO** or **DAPO** out of the box. The EDAS subroutine (three-branch advantage redistribution + κ-clip + warmup scheduling) is added as a post-hoc step right after group-relative advantage standardization, with the rest of the training pipeline untouched. Math reward (rule + sympy + optional LLM judge), prompt-format jinja, and vLLM rollout with dynamic per-prompt `max_tokens` are wired through verl's native components.
 
 ### Configuration knobs
 
@@ -166,25 +166,25 @@ We port the original Easy-R1 prototype of EDAS to the [verl](https://github.com/
 - A working verl + vLLM environment (Python 3.10+, with `mathruler` and `swanlab` installed)
 - Model checkpoints (Qwen3-8B / 4B / 4B-Base, …) and training data (DAPO-Math-17k, AIME / AMC / HMMT / Olympiad val sets, …) downloaded locally
 
-### Step 1 — Render Easy-R1 jinja prompts into verl-compatible parquet (once)
+### Step 1 — Render the prompt-format jinja into the training parquet (once)
 
-verl uses `tokenizer.apply_chat_template`, so Easy-R1's `data.format_prompt` jinja layer needs to be pre-rendered:
+verl uses `tokenizer.apply_chat_template`, so the system-prompt jinja layer needs to be pre-rendered into the parquet's `prompt` column:
 
 ```bash
-python3 examples/branch_adv/preprocess_easyR1_parquet.py \
+python3 examples/branch_adv/preprocess_parquet.py \
   --input  /path/to/DAPO-Math-17k-Processed/train.parquet \
   --output /path/to/DAPO-Math-17k-Processed/train.formatted.parquet \
   --template examples/branch_adv/format_prompt/math_wo_format.jinja \
   --split train
 
-python3 examples/branch_adv/preprocess_easyR1_parquet.py \
+python3 examples/branch_adv/preprocess_parquet.py \
   --input  /path/to/val_merge/val_merged.parquet \
   --output /path/to/val_merge/val_merged.formatted.parquet \
   --template examples/branch_adv/format_prompt/val_wo_format.jinja \
   --split val
 ```
 
-`--split val` tags val rows so the reward function (`compute_score_batch`) routes them through rule-only scoring, matching Easy-R1's `worker.val_reward`.
+`--split val` tags val rows so the reward function (`compute_score_batch`) routes them through rule-only scoring (no sympy / LLM judge on the val set).
 
 ### Step 2 — Train: DAPO + EDAS on Qwen3-8B
 
@@ -247,7 +247,6 @@ During training, EDAS publishes `branch_adv/*` series to SwanLab (warmup scale, 
 
 ```
 verl/
-├── EDPO_MIGRATION.md                          # Full Easy-R1 → verl porting audit
 ├── README.md                                  # ← this file
 ├── assets/edas/                               # Figures used in this README
 │   ├── framework.png
@@ -256,15 +255,14 @@ verl/
 │   ├── reward_curves.png
 │   └── error_diversity_curve.png
 ├── examples/branch_adv/
-│   ├── branch_adv_README.md                   # Early porting notes (kept for reference)
 │   ├── run_dapo_branch_adv.sh                 # DAPO + EDAS launcher
 │   ├── run_grpo_branch_adv.sh                 # GRPO + EDAS launcher
 │   ├── run_8b_non_thinking_04_30_20_wo_format_17k.sh   # Paper config
-│   ├── preprocess_easyR1_parquet.py           # Jinja prerender tool
-│   ├── format_prompt/                         # Easy-R1 jinja, used by preprocess
-│   ├── llm_judge_prompt/                      # Verbatim Easy-R1 math/sqa judges
+│   ├── preprocess_parquet.py                  # Jinja prerender tool
+│   ├── format_prompt/                         # Math / val system-prompt jinja
+│   ├── llm_judge_prompt/                      # Math / SQA LLM-judge prompts
 │   └── reward_function/                       # math_no_format / val_wo_format / llm_judge
-├── verl/                                      # Modified verl framework
+├── verl/                                      # verl framework (extended for EDAS)
 │   ├── trainer/
 │   │   ├── config/algorithm.py                # +branch_adv_* fields
 │   │   ├── config/ppo_trainer.yaml            # +algorithm.branch_adv_* defaults
@@ -273,17 +271,17 @@ verl/
 │   └── workers/
 │       ├── config/rollout.py                  # +enable_dynamic_max_tokens / length_log_*
 │       └── rollout/vllm_rollout/vllm_async_server.py  # honor enable_dynamic_max_tokens
-└── recipe/dapo/                               # Upstream verl DAPO recipe (unmodified entry)
+└── recipe/dapo/                               # verl's DAPO recipe (entry point reused as-is)
 ```
 
 ---
 
 ## 📝 Notes & caveats
 
-- **verl rollout path**: EDPO/verl targets the async-server vLLM path (`vllm_async_server.py`). The SPMD path was retired upstream in PR #4411 and now raises `NotImplementedError`. `actor_rollout_ref.rollout.mode=async` is the yaml default — don't override to `sync`.
-- **`gen_batch_size = train_batch_size × 2`**: matches verl's official `recipe/dapo` over-rollout default, which is faster than Easy-R1's 1:1 default (less retry from `filter_groups`). Pass `--gen_batch_size 256` to recover the strict 1:1 Easy-R1 reproduction.
-- **Validation reward**: Easy-R1 has a separate `worker.val_reward`; verl only has one `custom_reward_function`. We work around this by routing on `extra_info["split"] == "val"` inside `compute_score_batch`. **You must pass `--split val` to the preprocessor** or val rows will go through sympy + LLM judge (correct but slow & costly).
-- **LLM judge defaults** (host / ports / model / endpoint / timeout / retries / max_workers / max_tokens) are environment-variable driven and match Easy-R1 verbatim. Override via `LLM_JUDGE_*` env, the `--llm_judge_*` CLI flags, or Hydra overrides.
+- **verl rollout path**: this implementation targets the async-server vLLM path (`vllm_async_server.py`). The SPMD path was retired upstream in PR #4411 and now raises `NotImplementedError`. `actor_rollout_ref.rollout.mode=async` is the yaml default — don't override to `sync`.
+- **`gen_batch_size = train_batch_size × 2`**: matches verl's official `recipe/dapo` over-rollout default. Over-rolling out by 2× absorbs DAPO's `filter_groups` discards without triggering retries (controlled by `algorithm.filter_groups.max_num_gen_batches`). Pass `--gen_batch_size <train_batch_size>` to disable over-rollout.
+- **Validation reward**: verl exposes one `custom_reward_function`. We route train vs. val rows by checking `extra_info["split"]` inside `compute_score_batch`. **You must pass `--split val` to the preprocessor** so val rows are tagged accordingly; otherwise val rows will go through sympy + LLM judge (correct but slow & costly).
+- **LLM judge defaults** (host / ports / model / endpoint / timeout / retries / max_workers / max_tokens) are environment-variable driven. Override via `LLM_JUDGE_*` env, the `--llm_judge_*` CLI flags, or Hydra overrides.
 - **Math equivalence** is decided by `mathruler.grader.grade_answer` (e.g. `"42" ≡ "42.0"`), not embedding similarity — see Appendix A in the paper for why embedding alternatives fail on math.
 
 ---
@@ -307,8 +305,7 @@ verl/
 ## 🙏 Acknowledgements
 
 - Built on [verl](https://github.com/verl-project/verl) — the underlying RLHF / RLVR framework.
-- The original prototype lives in [Easy-R1](https://github.com/hiyouga/EasyR1); this repo ports it to verl while preserving the exact reward / LLM-judge / jinja pipeline.
-- LLM-judge inference uses `gpt-oss-20b` served via vLLM-compatible endpoints.
+- LLM-judge inference is served through vLLM-compatible OpenAI-style endpoints.
 
 ---
 

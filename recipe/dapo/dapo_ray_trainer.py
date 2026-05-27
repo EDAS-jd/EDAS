@@ -51,7 +51,7 @@ def _write_length_log(
     response_lengths: list[int],
     pad_len: int,
 ) -> None:
-    """Easy-R1 vllm_rollout_spmd.py:355-368 equivalent. Append one line per fire."""
+    """Per-step length-log helper. Append one line per fire."""
     if not prompt_lengths or not response_lengths:
         return
     try:
@@ -80,7 +80,7 @@ def _compute_passrate_metrics(
     rollout_n: int,
     verify_types=None,
 ) -> dict[str, float]:
-    """Easy-R1 ray_trainer passrate: per-step distribution of how many of the
+    """Per-step passrate: per-step distribution of how many of the
     n rollouts got the prompt right. Returns a dict
     {"passrate/0": .., "passrate/10": .., ..., "passrate/100": ..} where the
     bucket key is the percentage of correct rollouts in the group.
@@ -129,7 +129,7 @@ def _log_group_error_stats(
     ground_truths,
     verify_types=None,
 ) -> None:
-    """Easy-R1 ray_trainer._log_group_error_stats verbatim port.
+    """Per-step per-group error stats logger.
 
     Each call appends one JSON line describing per-group incorrect-answer
     distribution: mode_collapse detection, entropy, top wrong answer.
@@ -150,7 +150,7 @@ def _log_group_error_stats(
         if verify_types is None:
             verify_types = [None] * len(uid_list)
 
-        # Easy-R1's ground_truths column is a flat list of strings; verl puts it
+        # verl's ground_truths column may be wrapped one level deeper than expected;
         # inside reward_model as a dict {ground_truth: ...}. Normalize either form.
         normalized_gt: list[str] = []
         for g in gt_list:
@@ -357,7 +357,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                         timing_raw.update(gen_batch_output.meta_info["timing"])
                         gen_batch_output.meta_info.pop("timing", None)
 
-                    # ── Easy-R1 vllm_rollout_spmd length log (best-effort) ──
+                    # ── Per-step length log (best-effort) ──
                     # Honors actor_rollout_ref.rollout.length_log_path /
                     # length_log_interval; writes one line per `interval` steps
                     # with prompt/response/total min/mean/max + pad_len.
@@ -439,9 +439,9 @@ class RayDAPOTrainer(RayPPOTrainer):
                                 {k: np.array(v) for k, v in reward_extra_infos_dict.items()}
                             )
 
-                        # ── Easy-R1 EDPO debug records: passrate + group_error_stats ──
+                        # ── EDAS debug records: passrate + group_error_stats ──
                         # Both are best-effort, fire whenever `accuracy` is in the reward
-                        # extras (mirroring Easy-R1 ray_trainer.py:957-1033, which runs
+                        # extras (per-step debug telemetry, runs
                         # them regardless of branch_adv_enabled).
                         _acc_arr = reward_extra_infos_dict.get("accuracy") if reward_extra_infos_dict else None
                         _ans_arr = reward_extra_infos_dict.get("answer_pred") if reward_extra_infos_dict else None
@@ -457,7 +457,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                             )
                             metrics.update(passrate_metrics)
 
-                            # group_error_stats.jsonl — Easy-R1 wrote it next to the
+                            # group_error_stats.jsonl — we write it next to the
                             # checkpoint; mirror that.
                             ges_path = os.path.join(
                                 self.config.trainer.get("default_local_dir", "checkpoints"),

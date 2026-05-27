@@ -1,14 +1,14 @@
 """
-Pre-render Easy-R1 jinja format prompts into a verl-compatible parquet.
+Pre-render the system-prompt jinja into a verl-compatible parquet.
 
-Easy-R1 wraps each prompt with `data.format_prompt: math_wo_format.jinja` at
+The original training setup wrapped each prompt with `data.format_prompt: math_wo_format.jinja` at
 load time, then feeds `[{"role": "user", "content": <rendered_jinja>}]` to
 `tokenizer.apply_chat_template`. verl's RLHFDataset expects the same chat-list
 shape in the parquet's prompt column but has no jinja layer, so we render the
 template once here and write a new parquet alongside the original.
 
 Usage:
-    python preprocess_easyR1_parquet.py \
+    python preprocess_parquet.py \
         --input  /path/to/train.parquet \
         --output /path/to/train.formatted.parquet \
         --template examples/branch_adv/format_prompt/math_wo_format.jinja
@@ -16,7 +16,7 @@ Usage:
 For the validation set, point --template at val_wo_format.jinja. Both train
 and val parquets keep all other columns intact (reward_model, extra_info,
 answer, ...), so the existing reward function (compute_score_batch) and
-filter_groups path see identical data to the Easy-R1 run.
+filter_groups path see the prompts in their fully rendered form.
 """
 
 import argparse
@@ -27,7 +27,7 @@ import pandas as pd
 
 
 def _coerce_prompt_text(value) -> str:
-    """Easy-R1 only used the prompt's text. Accept both raw strings and the
+    """We only need the prompt text. Accept both raw strings and the
     chat-list shape (when the source parquet already wrapped it)."""
     if isinstance(value, str):
         return value
@@ -42,12 +42,12 @@ def _coerce_prompt_text(value) -> str:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True, help="Source parquet (Easy-R1 layout).")
+    parser.add_argument("--input", required=True, help="Source parquet.")
     parser.add_argument("--output", required=True, help="Destination parquet (verl-compatible).")
     parser.add_argument(
         "--template",
         required=True,
-        help="Path to the Easy-R1 jinja template (e.g. math_wo_format.jinja).",
+        help="Path to the system-prompt jinja template (e.g. math_wo_format.jinja).",
     )
     parser.add_argument(
         "--prompt-key",
@@ -59,7 +59,7 @@ def main():
         default=None,
         help=(
             "If the source parquet does not have a 'reward_model' column "
-            "(e.g. Easy-R1 val_merged.parquet only has 'answer'), specify the "
+            "(e.g. when the source parquet only has 'answer'), specify the "
             "column to copy into reward_model['ground_truth'] so verl's reward "
             "managers can find it. Skipped when --answer-key is omitted."
         ),
@@ -79,7 +79,7 @@ def main():
         choices=[None, "train", "val"],
         help=(
             "If set, inject extra_info['split'] = <value> for every row. "
-            "compute_score_batch reads this to mirror Easy-R1's split-specific "
+            "compute_score_batch reads this to drive split-specific "
             "reward path: 'val' skips sympy + LLM judge + length_penalty and "
             "matches val_wo_format.py exactly."
         ),

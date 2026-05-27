@@ -1,20 +1,20 @@
 #!/bin/bash
-# verl DAPO + branch_adv (EDPO) launcher.
-# Mirrors the CLI surface of Easy-R1's run_multinode_1_02_20_2k_4k_dapo.sh
-# so the same invocation works against the verl framework via recipe/dapo.
+# verl DAPO + branch_adv (EDAS) launcher.
+# Reference launcher for DAPO + EDAS,
+# wired through recipe/dapo's RayDAPOTrainer.
 #
 # What this script wires up that the GRPO variant does NOT:
 #   - Entry point: python3 -m recipe.dapo.main_dapo (RayDAPOTrainer.fit)
 #   - algorithm.filter_groups.enable=True (DAPO dynamic sampling, equivalent to
-#     Easy-R1 online_filtering)
+#     online_filtering)
 #   - DAPO clip ratios (0.2 / 0.28) and disable_kl semantics
-#   - data.gen_batch_size mirroring Easy-R1's rollout_batch_size, with
-#     max_num_gen_batches = Easy-R1 max_try_make_batch
+#   - data.gen_batch_size mirroring the prior rollout_batch_size, with
+#     max_num_gen_batches = max_try_make_batch
 #
 # Reward path is identical to the GRPO variant: BatchRewardManager + the
-# Easy-R1 1:1 compute_score_batch with LLM judge fan-out.
+# 1:1 compute_score_batch with LLM judge fan-out.
 #
-# IMPORTANT: To match Easy-R1's split-specific reward (train uses rule + sympy +
+# IMPORTANT: To get split-specific reward routing (train uses rule + sympy +
 # LLM judge, val uses rule-only), the val parquet must be preprocessed with
 # `--split val` so each row carries extra_info.split='val'. compute_score_batch
 # reads that flag and skips sympy + LLM judge + length_penalty for val samples.
@@ -51,14 +51,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TASK_ID="$(date +%Y%m%d%H%M)"
 NUM_GPUS=8
 
-# DAPO core hyperparameters (match Easy-R1 config_2k-8k_wo_format_04_03_20.yaml
-# after the CLI overrides used in run_multinode_1_02_20_2k_4k_dapo.sh)
+# DAPO core hyperparameters (reference recipe hyperparameters)
 CLIP_RATIO_LOW=0.2
 CLIP_RATIO_HIGH=0.28
 DISABLE_KL=True                # -> use_kl_in_reward=False + actor.use_kl_loss=False
 ONLINE_FILTERING=True          # -> algorithm.filter_groups.enable
-FILTER_METRIC=accuracy         # binary, std-based filter is equivalent to Easy-R1's 0.01<mean<0.99
-MAX_TRY_MAKE_BATCH=20          # -> filter_groups.max_num_gen_batches (Easy-R1 default)
+FILTER_METRIC=accuracy         # binary, std-based filter is equivalent to the prior 0.01<mean<0.99
+MAX_TRY_MAKE_BATCH=20          # -> filter_groups.max_num_gen_batches (default)
 
 SAVE_FREQ=10
 TEST_FREQ=5
@@ -71,7 +70,7 @@ ENABLE_DYNAMIC_MAX_TOKENS=True
 PENALTY_MAX_LENGTH=50000
 OVERLONG_BUFFER_LENGTH=0
 
-# Rollout / actor (mirrors Easy-R1 config_2k-8k_wo_format_04_03_20.yaml)
+# Rollout / actor (reference recipe hyperparameters)
 ROLLOUT_N=10
 ROLLOUT_TP=2
 ROLLOUT_GPU_MEM_UTIL=0.8
@@ -84,17 +83,17 @@ ACTOR_WEIGHT_DECAY=1.0e-2
 ACTOR_ULYSSES=1
 ACTOR_GRAD_NORM=1.0
 
-# Easy-R1's rollout_batch_size = 256, val_batch_size = 1024.
+# Defaults: rollout_batch_size = 256, val_batch_size = 1024.
 TRAIN_BATCH_SIZE=256
 VAL_BATCH_SIZE=1024
 # Follow verl's official DAPO recipe (recipe/dapo/run_dapo_qwen3_moe_30b_megatron_npu.sh):
 # gen_batch_size = train_batch_size * 2. Over-rollout 2x so DAPO filter_groups
 # can discard unqualified groups without triggering as many retry rollouts; faster
-# than Easy-R1's 1:1 default. CLI --gen_batch_size overrides; --train_batch_size N
+# than the 1:1 default. CLI --gen_batch_size overrides; --train_batch_size N
 # re-derives GEN_BATCH_SIZE = N * 2 unless --gen_batch_size is also passed.
 GEN_BATCH_SIZE=$((TRAIN_BATCH_SIZE * 2))
 
-# Branch-adv (EDPO) defaults — match the user's Easy-R1 yaml.
+# Branch-adv (EDAS) defaults.
 BRANCH_ADV_ENABLED=True
 BRANCH_ADV_ALPHA=0.4
 BRANCH_ADV_BETA=0.3
@@ -126,7 +125,7 @@ LLM_JUDGE_MAX_WORKERS="${LLM_JUDGE_MAX_WORKERS:-512}"
 LLM_JUDGE_MAX_TOKENS="${LLM_JUDGE_MAX_TOKENS:-1024}"
 ENABLE_LLM_JUDGE="${ENABLE_LLM_JUDGE:-True}"
 
-# Validation override (Easy-R1 worker.rollout.val_override_config)
+# Validation override (validation sampling override)
 VAL_TEMPERATURE=0.7
 VAL_TOP_P=0.8
 VAL_TOP_K=20
@@ -139,7 +138,7 @@ usage() {
 Usage:
   bash run_dapo_branch_adv.sh \\
     --model_path <path> \\
-    --train_data <path>        # *.formatted.parquet (preprocessed via preprocess_easyR1_parquet.py) \\
+    --train_data <path>        # *.formatted.parquet (preprocessed via preprocess_parquet.py) \\
     --output_path <path> \\
     [--val_data <path>] \\
     [--task_name <name>] \\
@@ -386,7 +385,7 @@ PY_ARGS=(
 
   # reward — use our compute_score_batch (LLM judge fan-out, batch manager).
   # The DAPO recipe's default reward_manager=dapo is overridden here on
-  # purpose — we want Easy-R1 reward parity, not DAPO-paper overlong buffer.
+  # purpose — we use our own reward function, which already bakes the length penalty into 'score'.
   reward.custom_reward_function.path=${REWARD_FN_PATH}
   reward.custom_reward_function.name=${REWARD_FN_NAME}
   reward.reward_manager.name=${REWARD_MANAGER}

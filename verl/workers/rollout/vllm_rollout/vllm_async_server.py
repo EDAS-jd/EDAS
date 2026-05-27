@@ -478,10 +478,10 @@ class vLLMHttpServer:
             # Cap max_tokens by response_length to ensure tensor alignment,
             # and by remaining budget to prevent OOM in multi-turn rollouts.
             #
-            # When enable_dynamic_max_tokens=True (Easy-R1 / EDPO behavior),
+            # When enable_dynamic_max_tokens=True (EDAS behavior),
             # drop the response_length cap AND raise the budget ceiling to
             # max_model_len so a short prompt can use the full remaining
-            # context window. This matches Easy-R1 vllm_rollout_spmd.py:230
+            # context window. This lets short prompts use the full remaining context window
             # where dynamic_max = max_model_len - p_len.
             if self.config.get("enable_dynamic_max_tokens", False):
                 max_tokens = max_possible_tokens

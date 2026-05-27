@@ -273,7 +273,7 @@ class RolloutConfig(BaseConfig):
 
     enable_rollout_routing_replay: bool = False
 
-    # ── Easy-R1 / EDPO ports ──────────────────────────────────
+    # ── EDAS extensions ──────────────────────────────────
     # If True, set per-prompt max_tokens = max_model_len - len(prompt_ids), allowing
     # responses to exceed the static response_length when the prompt is shorter than
     # prompt_length. If False (default), max_tokens is capped by response_length.

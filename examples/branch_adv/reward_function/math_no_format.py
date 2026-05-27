@@ -8,7 +8,7 @@
 # Two entry points:
 #   - compute_score(...)        : per-sample (NaiveRewardManager). NO LLM judge.
 #                                 Kept for backward compat / debug.
-#   - compute_score_batch(...)  : batch (BatchRewardManager). MIRRORS Easy-R1's
+#   - compute_score_batch(...)  : batch (BatchRewardManager). Implements the full reward pipeline
 #                                 math_no_format.compute_score 1:1, including
 #                                 the rule -> sympy -> LLM judge fallback.
 #
@@ -18,7 +18,7 @@
 #   - answer_pred    : extracted boxed answer    — used by branch_adv (EDPO)
 #   - format         : format score (always 1.0 here, since format check is disabled)
 #   - length_penalty : soft over-long penalty
-#   - overall        : alias of score for parity with Easy-R1
+#   - overall        : alias of score for downstream compatibility
 
 import re
 from typing import Any, Optional
@@ -32,7 +32,7 @@ try:
 except Exception:  # pragma: no cover
     _HAS_SYMPY = False
 
-# LLM judge fallback (mirrors Easy-R1).
+# LLM judge fallback.
 try:
     from .llm_judge import llm_judge_batch  # type: ignore
 except ImportError:
@@ -102,7 +102,7 @@ def _resolve_response_length(extra_info: Optional[dict], response: str) -> int:
                 except Exception:
                     pass
     # Fallback: word-count proxy for token length. With penalty_max_length=50000
-    # this stays well under threshold so length_penalty=0 (Easy-R1 parity for
+    # this stays well under threshold so length_penalty=0 (parity safeguard for
     # the default GRPO base run).
     return len(response.split()) if isinstance(response, str) else 0
 
@@ -133,7 +133,7 @@ def compute_score(
     """Per-sample reward (NaiveRewardManager). NO LLM judge — sync HTTP would
     serialize per-sample under the naive manager and stall training.
 
-    For full Easy-R1 parity (rule -> sympy -> LLM judge), use
+    For the full pipeline (rule -> sympy -> LLM judge), use
     `compute_score_batch` together with `reward.reward_manager.name=batch`.
     """
     response = _clean_response(solution_str)
@@ -179,7 +179,7 @@ def compute_score_batch(
     llm_judge_max_workers: Optional[int] = None,
     **kwargs,
 ) -> list[dict]:
-    """Batch reward (BatchRewardManager). 1:1 mirror of Easy-R1's
+    """Batch reward (BatchRewardManager). Full pipeline:
     `math_no_format.compute_score` flow:
 
         for each sample:
@@ -191,7 +191,7 @@ def compute_score_batch(
         overall = accuracy + overlong_penalty_factor * length_penalty
 
     Defaults (host / ports / model / endpoint) come from `llm_judge.py`
-    module-level env reads — same as Easy-R1, so the same training run
+    module-level env reads — so the same training run
     talks to the same judge cluster.
     """
     solution_strs = list(solution_strs or [])
@@ -216,7 +216,7 @@ def compute_score_batch(
         response = _clean_response(solution_str)
         response_length = _resolve_response_length(ei, response)
         if is_val:
-            # Easy-R1 val_wo_format.py: no length penalty in val.
+            # no length penalty in val.
             length_penalty = 0.0
         else:
             length_penalty = _soft_overlong_punishment(
@@ -233,7 +233,7 @@ def compute_score_batch(
         if not ans or not normalized_gt:
             accuracy_score = 0.0
         elif is_val:
-            # Easy-R1 val path: pure rule-based grade_answer, no sympy / no LLM judge.
+            # val path: pure rule-based grade_answer, no sympy / no LLM judge.
             accuracy_score = 1.0 if grade_answer(ans, normalized_gt) else 0.0
         else:
             rule = _rule_score(ans, normalized_gt)
@@ -264,13 +264,13 @@ def compute_score_batch(
                 "accuracy": accuracy_score,
                 "length_penalty": float(length_penalty),
                 "answer_pred": ans,
-                # Easy-R1 val_wo_format returns format=0.0; train returns 1.0.
+                # val rows report format=0.0; train rows report 1.0.
                 "format": 0.0 if is_val else 1.0,
                 "_is_val": is_val,
             }
         )
 
-    # Fan-out LLM judge (thread pool, port round-robin) — mirrors Easy-R1.
+    # Fan-out LLM judge (thread pool, port round-robin).
     if judge_jobs:
         results = llm_judge_batch(
             [
@@ -298,7 +298,7 @@ def compute_score_batch(
         s["accuracy"] = float(acc)
         is_val = bool(s.pop("_is_val", False))
         if is_val:
-            # Easy-R1 val_wo_format.py: overall == accuracy, no length-penalty mix.
+            # overall == accuracy, no length-penalty mix.
             overall = float(s["accuracy"])
         else:
             overall = float(s["accuracy"]) + float(overlong_penalty_factor) * float(s["length_penalty"])

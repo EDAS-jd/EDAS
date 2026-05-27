@@ -1,7 +1,6 @@
 #!/bin/bash
-# verl GRPO + branch_adv (EDPO) launcher.
-# Mirrors the CLI surface of Easy-R1's run_multinode_1_02_20_2k_4k_grpo.sh
-# so the same invocation works against the verl framework.
+# verl GRPO + branch_adv (EDAS) launcher.
+# Reference launcher for GRPO + EDAS.
 
 set -euo pipefail
 set -x
@@ -48,7 +47,7 @@ ENABLE_DYNAMIC_MAX_TOKENS=True
 PENALTY_MAX_LENGTH=50000
 OVERLONG_BUFFER_LENGTH=0
 
-# Branch-adv (EDPO) defaults
+# Branch-adv (EDAS) defaults
 BRANCH_ADV_ENABLED=True
 BRANCH_ADV_ALPHA=0.4
 BRANCH_ADV_BETA=0.2
@@ -68,12 +67,12 @@ OUTPUT_PATH=""
 # The jinja is informational only (verl uses HF chat_template natively); see
 # branch_adv_README.md for how to bake the system prompt into the parquet.
 REWARD_FN_PATH="${SCRIPT_DIR}/reward_function/math_no_format.py"
-# Default to the batch entry point so LLM judge fan-out (Easy-R1 parity) works.
+# Default to the batch entry point so LLM judge fan-out works.
 REWARD_FN_NAME="compute_score_batch"
 REWARD_MANAGER="batch"
 
 # LLM judge defaults — read by examples/branch_adv/reward_function/llm_judge.py
-# at module load via os.getenv. These match Easy-R1's defaults verbatim.
+# at module load via os.getenv. See examples/branch_adv/reward_function/llm_judge.py for defaults.
 LLM_JUDGE_HOST="${LLM_JUDGE_HOST:-10.119.97.103}"
 LLM_JUDGE_PORTS="${LLM_JUDGE_PORTS:-9000-9007}"
 LLM_JUDGE_MODEL="${LLM_JUDGE_MODEL:-/mnt/public/users/zhuyongfu/model/openai/gpt-oss-20b}"
