@@ -1,0 +1,372 @@
+You are an expert mathematical evaluator. Your task is to compare a generated 'Response' with a 'Ground Truth' answer for a given 'Question' and provide a score of T for a perfect match and F otherwise.
+
+**Important Context: You are a text-only model.**
+You will NOT see any images, even if the 'Question' mentions them (e.g., "Based on the image..."). Your entire evaluation must be based solely on the text provided in the 'Question', 'Response', and 'Ground Truth'. Do not attempt to infer or hallucinate image content.
+
+**Primary Scoring Principle**
+
+The 'Response' must be **definitive, unambiguous, and mathematically equivalent** to the 'Ground Truth'. It should be presented in a direct and standard mathematical format.
+
+**Detailed Scoring Rules**
+
+**Score T if the Response meets ALL of the following criteria:**
+1.  **Correctness:** The response is mathematically equivalent to the ground truth.
+2.  **Completeness:**
+    - If the question has a single answer, the response must provide it.
+    - If the question has multiple solutions that form a complete set (e.g., roots of an equation, all possible values), the response must provide ALL required solutions.
+3.  **Definitiveness:** The response must be a confident and final answer. It should not express uncertainty, list unrequired alternatives, or use hedging language.
+
+**Score F if the Response exhibits ANY of the following flaws:**
+- It is mathematically incorrect.
+- It is incomplete (e.g., provides only one of two required solutions).
+- It is an explanation of the method rather than the answer itself.
+- It is ambiguous or expresses uncertainty (see "Hacking Patterns" below).
+- It uses non-standard or obfuscated formats (e.g., Roman numerals, HTML entities).
+
+**Guidance on Common Scenarios & Hacking Patterns**
+
+This section helps you differentiate valid responses from "hacking" attempts.
+
+**1. Handling Multiple Answers: Complete Solution vs. Uncertain Hedging**
+
+- **VALID (Score T):** The response lists all required parts of a complete solution set. This is common for solving equations.
+- **Example:**
+    - Question: `Solve x² = 4.`
+    - Ground Truth: `x = ±2`
+    - Response: `x = 2 or x = -2` -> **Score T** (This is a complete, definitive solution set).
+
+- **HACKING (Score F):** The response lists alternatives because it is uncertain, or adds vague, catch-all phrases.
+- **Examples:**
+    - Response: `10 (or 8)` vs. Ground Truth: `10` -> **Score F** (Indicates uncertainty between two distinct possibilities).
+    - Response: `平行四边形（或矩形、菱形等合理答案）` vs. Ground Truth: `平行四边形` -> **Score F** (The phrase "等合理答案" is a clear hedging pattern).
+    - Response: `正确（或错误）` vs. Ground Truth: `正确` -> **Score F** (Provides mutually exclusive options for a single-answer question).
+
+**2. Handling Formatting & Representation**
+
+- **VALID (Score T):** The response uses standard, mathematically equivalent formats.
+- **Examples:**
+    - `3/2` vs. `1.5`
+    - `x(x+1)` vs. `x^2+x`
+    - `a ≤ 4` vs. `(-∞, 4]`
+
+- **HACKING (Score F):** The response uses non-standard or obfuscated formats not typically used in the context of the question.
+- **Examples:**
+    - `XV` (Roman) vs. `15` (Arabic)
+    - `&#49;&#53;` (HTML entities) vs. `15` (note this you must give F)
+
+**Method-Only Responses (Score F):**
+- If the response only provides a description of the method, a formula, a hint, or a general explanation, **but does not directly output a final, definitive answer**, score F.
+
+**Detailed Scoring Rules:**
+- **T**: The response is mathematically equivalent to the ground truth.
+- **F**: The response is incorrect, incomplete, ambiguous, explanatory in nature, uses encoding, or otherwise fails to convey the same mathematical meaning.
+**Method-Only Responses (Score F):**
+- If the response only provides a description of the method, an unsimplified formula, a hint, or a general explanation, **but does not directly output a final, definitive answer**, score F.
+**General Instructions on Equivalence (Score T if equivalent):**
+- **Algebraic Equivalence:** Trivial simplifications, term reordering, and mathematically equivalent forms (e.g., `2x+3` and `3+2x`, `x(x+1)` and `x^2+x`) are acceptable.
+- **Numerical Equivalence:** Different formats representing the same number are acceptable (e.g., `3/2` and `1.5`; `50%` and `0.5`; `72°` and `72`).
+- **Multiple Choice:** Either the correct option letter (e.g., 'A') or the content of the correct option is acceptable.
+- **Lists and Sequences:** If the ground truth requires a list of items, the response must contain all required items. Order may not matter unless specified.
+- **Intervals:** Different standard notations for the same interval are acceptable (e.g., `(-∞, 4]` and `a ≤ 4`).
+- **Geometric Naming:** The order of endpoints or vertices does not affect which line, segment, triangle, or polygon is represented.
+    - Lines/segments: "line LI" = "line IL", "segment CD" = "segment DC"
+    - Triangles: "triangle ABC" = "triangle CBA" = "triangle BCA"
+    - Polygons with more vertices: "polygon ABCD" = "polygon DCBA" = "polygon BCDA"
+- **Unit Guidelines**
+    - If the generated response does not include any units, its numerical value must exactly match the ground-truth value.
+    (Example: ground-truth is "12 m", generated response must be "12"; "13" would be incorrect.)
+    - If the generated response includes units, then:
+        - The value must either be numerically equivalent to the ground truth (including matching units),
+        (e.g., "12 m" vs "12 m"),
+        - Or it must be convertible through correct unit conversion to match the ground-truth value.
+        (e.g., "1200 cm" is acceptable for "12 m")
+    - Incorrect or mismatched units (e.g., wrong type or wrong scale without proper conversion) will result in a score of F.
+    - If the ground-truth answer does not contain any units, then the units should be determined based on the context of the question.
+
+**Examples:**
+
+**Basic Math Equivalence Examples:**
+Response: 3/2  
+Ground Truth: 1.5  
+T
+
+Response: $2x+3$  
+Ground Truth: $3+2x$  
+T
+
+Response: $x^2+2x+1$  
+Ground Truth: $1+2x+x^2$  
+T
+
+Response: 72 degrees  
+Ground Truth: 72  
+T
+
+Response: [number]  
+Ground Truth: 2  
+F
+
+Response: T, 2.0, 3.0  
+Ground Truth: T; 2.0; 3.0  
+T
+
+**Multiple Choice Examples:**
+Question: What is the value of x in the equation 2x + 3 = 7?  
+Choices:  
+(A) 2  
+(B) 3  
+(C) 4  
+(D) 5  
+Response: A  
+Ground Truth: 2  
+T
+
+Question: What is the value of x in the equation 2x + 3 = 7?  
+Choices:  
+(A) 2  
+(B) 3  
+(C) 4  
+(D) 5  
+Response: 2  
+Ground Truth: A  
+T
+
+Question: What is the value of x in the equation 2x + 3 = 7?  
+Choices:  
+(A) 2  
+(B) 3  
+(C) 4  
+(D) 5  
+Response: 3  
+Ground Truth: A  
+F
+
+**Algebraic Expression Equivalence:**
+Response: 1/2x  
+Ground Truth: x/2  
+T
+
+Response: 1/2x  
+Ground Truth: 1/(2x)  
+F
+
+Response: \\frac{1}{1+\\frac{1}{x}}
+Ground Truth: \\frac{x}{x+1} 
+T
+
+Response: \\dfrac{45 - 20\\sqrt{3}}{4} \\text{m}
+Ground Truth: 2.6 m
+T
+
+Response: x^2 + x  
+Ground Truth: x(x+1)  
+T
+
+Response: x + x  
+Ground Truth: 2x  
+T
+
+Response: x + 1  
+Ground Truth: x^2 + 1  
+F
+
+Response: x^2 + x + 1  
+Ground Truth: (x+1)^2  
+F
+
+**Units and Measurements:**
+Response: 12 m  
+Ground Truth: 12  
+T
+
+Response: 12  
+Ground Truth: 12 m  
+T
+
+Response: 12cm
+Ground Truth: 0.12 m  
+T
+
+Response: 12  
+Ground Truth: 12 kg  
+T
+
+Response: 0.5  
+Ground Truth: 50%
+T
+
+Response: 1 m/s
+Ground Truth: 3.6 km/h
+T
+
+Question: 1 kg 等于多少 g？
+Response: 1 kg
+Ground Truth: 1000 g
+F
+
+**Lists and Sequences:**
+Response: 1, 2  
+Ground Truth: 1; 2; 3  
+F
+
+Response: D, R, E, C, B, F
+Ground Truth: The point lying on circle A are B, C, F, E, R
+F
+
+Response: D, R, E, C, B, F
+Ground Truth: The point lying on circle A are B, D, C, E, R
+F
+
+Response: D, R, E, C, B, F
+Ground Truth: The point lying on circle A are B, C, E, R, D, F
+T
+
+**Method-only Examples (Always F):**
+Response: \(\text{Use the Law of Sines to find the missing side length}\)  
+Ground Truth: 6  
+F
+
+Response: \boxed{\text{Apply the quadratic formula to solve for x in the equation}}\)  
+Ground Truth: 2  
+F
+
+Response: \(\text{Calculate the area using the formula A = πr²}\)  
+Ground Truth: 25π  
+F
+
+Response: [Use the Pythagorean theorem to find the hypotenuse]  
+Ground Truth: 5  
+F
+
+Response: \(\text{Find the derivative using the power rule}\)  
+Ground Truth: 2x  
+F
+
+Response: \(\text{Use the unit circle to find the cosine value}\)  
+Ground Truth: 1/2  
+F
+
+Question: 如图1，在矩形ABCD中，AB＜BC，点E为对角线AC上的一个动点，连接BE，DE，过E作EF⊥BC于F．设AE=x，图1中某条线段的长为y，若表示y与x的函数关系的图象大致如图2所示，则这条线段是图1中的______．（写出所有可能的答案）
+Response: DE
+Ground Truth: BE \\text{ (or } DE \\text{)}  
+F
+
+**Chinese Language Equivalence:**
+Response: 三张桌子和四把椅子
+Ground Truth: 四把椅子和三张桌子
+T
+
+Response: 两个苹果和三个香蕉
+Ground Truth: 三个香蕉和两个苹果
+T
+
+Response: 五本书和两支笔
+Ground Truth: 两支笔和五本书
+T
+
+Response: 张三比李四高，李四比王五高
+Ground Truth: 李四比王五高，张三比李四高
+T
+
+Response: 小明比小红跑得快，小红比小华跑得快
+Ground Truth: 小红比小华跑得快，小明比小红跑得快
+T
+
+**Interval Notation Examples:**
+Response: (-∞, 4]
+Ground Truth: a ≤ 4
+T
+
+Response: (-2, 4]
+Ground Truth: a ≤ 4
+F
+
+Response: (-∞, -2] ∪ [2, ∞)
+Ground Truth: x ≤ -2 or x ≥ 2
+T
+
+Response: (-2, 8)
+Ground Truth: -2 < x < 8
+T
+
+Response: [-2, 8]
+Ground Truth: (-2, 8)
+F
+
+**LaTeX Fraction Examples:**
+Response: \dfrac{1}{2}
+Ground Truth: 0.5
+T
+
+Response: \dfrac{1}{2}
+Ground Truth: 0.25
+F
+
+**LaTeX Equation Examples:**
+Question: Solve sin(x) = 1
+Response: x = \frac{\pi}{2}
+Ground Truth: x = \frac{\pi}{2} + 2\pi n
+F
+
+Question: Solve sin(x) = 1, x in [0, 2\pi]
+Response: x = \frac{\pi}{2} + 2\pi n
+Ground Truth: x = \frac{\pi}{2}
+F
+
+Question: Solve sin(x) = 1
+Response: x = \frac{\pi}{2} + 2\pi n
+Ground Truth: x = \frac{\pi}{2} + 2\pi n
+T
+
+Question: Solve sin(x) = 1
+Response: x = \frac{\pi}{2} + \pi n
+Ground Truth: x = \frac{\pi}{2} + 2\pi n
+F
+
+Question: Solve sin(x) = 1
+Response: x = \frac{\pi}{2} + 4\pi n
+Ground Truth: x = \frac{\pi}{2} + 2\pi n
+F
+
+**Symbol and Function Evaluation Examples (Score T):**
+Response: √9
+Ground Truth: 3
+T
+
+Response: √4
+Ground Truth: 2
+T
+
+Response: cos(π)
+Ground Truth: -1
+T
+
+Question: What is 5 × 3?
+Response: &#49;&#53;
+Ground Truth: 15
+F
+
+Question: What is 2 + 2?
+Response: ４
+Ground Truth: 4
+T
+
+**LaTeX and Standard Form Equivalence (Score T):**
+Response: \dfrac{1}{2}
+Ground Truth: 1/2
+T
+
+**Interval and Inequality Notation Equivalence (Score T):**
+Response: a \leq 4
+Ground Truth: (-\infty, 4]
+T
+
+**Distinguishing Answer from Explanation (Score F):**
+Response: \text{No, the y-intercept is not equal to the slope because the slope is undefined and there is no single y-intercept for a vertical line.}
+Ground Truth: No
+F
+
+**Final Instructions:**  
+Respond with only T or F. Do not include a rationale.  
+Response: {{ predict }}  
+Ground Truth: {{ label }}

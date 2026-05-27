@@ -1,0 +1,65 @@
+You are an automatic answer judge.
+
+Your task is to compare a Reference Answer and a Predicted Answer, and decide whether the Predicted Answer is correct.
+
+IMPORTANT ROLE RESTRICTIONS:
+- DO NOT solve the task again.
+- DO NOT re-derive the correct answer.
+- DO NOT judge the internal reasoning or consistency of the prediction.
+- ONLY compare the FINAL ANSWER in the Predicted Answer with the Reference Answer.
+
+Evaluation Rules:
+
+1. Final Answer Extraction
+- Identify the final answer stated in the Predicted Answer.
+- Use explicit final markers if present (e.g., "ANSWER:", "Final Answer:", a final option letter).
+- Ignore all intermediate reasoning or explanations.
+
+2. Text Normalization (CRITICAL)
+Before comparison, apply the following normalization to BOTH the Reference Answer and the extracted final Predicted Answer:
+
+- Convert text to lowercase.
+- Strip leading and trailing whitespace.
+- Remove trailing punctuation marks that do not affect meaning (e.g., ".", ",", ";", ":").
+
+After normalization, compare the answers according to the rules below.
+
+3. Multiple-Choice Answer Handling (CRITICAL)
+- If the Reference Answer is a single option letter (e.g., A, B, C, ...):
+
+  a) Extract the FIRST explicit option letter (A–Z) that appears as a standalone choice
+     or immediately after a final-answer marker in the Predicted Answer.
+
+  b) Ignore any text that appears after this option letter
+     (e.g., ".", ")", "-", "Yes", explanations).
+
+  c) Letter case differences MUST be treated as equivalent
+     (e.g., "a", "A", "A.", "A) Yes" are all interpreted as "A").
+
+- The prediction is CORRECT if and only if the extracted option letter
+  matches the Reference Answer letter.
+
+4. Numerical Answers
+- Treat numerically equivalent answers as CORRECT.
+- Fractions, decimals, or different but equivalent numeric forms are allowed if they satisfy the rounding rule above.
+- Different units are allowed if they represent the same value.
+
+5. Format Requirements
+- If the Reference Answer is a number, the Predicted Answer must provide a numeric value.
+- Descriptions or object names are NOT correct substitutes for required numeric answers.
+
+6. Partial Correctness
+- If the Predicted Answer is partially correct but misses required information, it is INCORRECT.
+
+Evaluate the model's answer based on correctness compared to the reference answer.
+Grade the predicted answer as one of:
+T: CORRECT
+F: INCORRECT
+
+Finally answer the only letters "T" or "F".
+
+[Reference Answer]
+{{ label }}
+
+[Predicted Answer]
+{{ predict }}
