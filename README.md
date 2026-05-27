@@ -70,7 +70,7 @@ $$
 Then a monotonicity-preserving clip:
 
 $$
-A_i^{\text{final}} = A_i^{\text{orig}} + \operatorname{sgn}(\Delta_i) \cdot \min\!\left(|\Delta_i|,\ \frac{|A_i^{\text{orig}}|}{\kappa}\right), \quad \kappa > 1
+A_i^{\text{final}} = A_i^{\text{orig}} + \operatorname{sgn}(\Delta_i) \cdot \min\left(|\Delta_i|,\ \frac{|A_i^{\text{orig}}|}{\kappa}\right), \quad \kappa > 1
 $$
 
 Properties:
