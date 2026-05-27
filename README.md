@@ -142,23 +142,7 @@ For code, $\mathcal{E}$ maps each failure to its Python exception type — the r
 
 ## 🛠 Implementation
 
-This repository ports the original Easy-R1 prototype to the **verl** framework. The full migration audit lives in [`EDPO_MIGRATION.md`](EDPO_MIGRATION.md); a brief summary:
-
-| Layer | File | What changed |
-|---|---|---|
-| Algorithm | `verl/trainer/config/algorithm.py` | `AlgoConfig` gets 9 `branch_adv_*` fields (enable / α / β / κ / log_path / warmup_start / warmup_steps / acc_key / answer_key / format_key). |
-| Algorithm | `verl/trainer/config/ppo_trainer.yaml` | Hydra defaults for the above. |
-| Algorithm | `verl/trainer/ppo/core_algos.py` | New `_apply_branch_advantage_adjustment(...)` (3 branches A/B/C + κ-clip + per-step log). `compute_grpo_outcome_advantage(...)` calls it in-place after standardization. Uses `mathruler.grader.grade_answer` for canonical answer de-dup. |
-| Algorithm | `verl/trainer/ppo/ray_trainer.py` | Warmup-scale scheduler + `branch_adv_kwargs` wiring in `compute_advantage(...)`. `fit()` pulls `accuracy / answer_pred / format` from `non_tensor_batch`, scales α/β, resolves a save-relative log path, and surfaces `branch_adv/*` metrics to SwanLab. |
-| Rollout | `verl/workers/config/rollout.py` + `verl/trainer/config/rollout/rollout.yaml` | `enable_dynamic_max_tokens: bool`, `length_log_interval: int`, `length_log_path: Optional[str]`. |
-| Rollout | `verl/workers/rollout/vllm_rollout/vllm_async_server.py` | `generate(...)` honors `enable_dynamic_max_tokens=True` by setting `max_tokens = max_model_len - len(prompt_ids)` — short prompts can use the full remaining context. Matches Easy-R1's `vllm_rollout_spmd.py:230`. (verl's SPMD path was retired in PR #4411; async-server is the only active vLLM path.) |
-| Reward | `examples/branch_adv/reward_function/math_no_format.py` | Both `compute_score` (per-sample, no LLM judge) and `compute_score_batch` (batch, 1:1 replica of Easy-R1's pipeline: rule → sympy → LLM-judge fan-out). Returns `{score, accuracy, answer_pred, format, length_penalty, ...}` — `accuracy` and `answer_pred` feed EDAS. Reads `extra_info["split"]` to route val rows through rule-only. |
-| Reward | `examples/branch_adv/reward_function/llm_judge.py` | Verbatim from Easy-R1: HTTP client, port round-robin, `ThreadPoolExecutor(max_workers=512)`. |
-| Reward | `examples/branch_adv/llm_judge_prompt/{math,sqa}.jinja` | Verbatim from Easy-R1. |
-| Launch | `examples/branch_adv/run_dapo_branch_adv.sh` | DAPO + EDAS launcher (entry: `recipe.dapo.main_dapo`). Defaults to verl's `gen_batch_size = train_batch_size × 2` (over-rollout to absorb DAPO's `filter_groups` discards). |
-| Launch | `examples/branch_adv/run_grpo_branch_adv.sh` | Plain GRPO + EDAS launcher (entry: `verl.trainer.main_ppo`). |
-| Launch | `examples/branch_adv/run_8b_non_thinking_04_30_20_wo_format_17k.sh` | Convenience wrapper for the headline Qwen3-8B configuration. |
-| Data | `examples/branch_adv/preprocess_easyR1_parquet.py` | One-shot tool to render Easy-R1-style format-prompt jinja into a verl-compatible parquet and tag val rows. |
+We port the original Easy-R1 prototype of EDAS to the [verl](https://github.com/verl-project/verl) framework, so it can be plugged into either **GRPO** or **DAPO** out of the box. The EDAS subroutine (three-branch advantage redistribution + κ-clip + warmup scheduling) is added as a post-hoc step right after group-relative advantage standardization, with the rest of the training pipeline untouched. Reward, LLM judge and jinja prompts are kept 1:1 with Easy-R1 to guarantee reward parity; vLLM rollout is wired through verl's async server with dynamic per-prompt `max_tokens`. Full per-file audit is in [`EDPO_MIGRATION.md`](EDPO_MIGRATION.md).
 
 ### Configuration knobs
 
@@ -178,16 +162,9 @@ This repository ports the original Easy-R1 prototype to the **verl** framework. 
 
 ### Prerequisites
 
-- 8× H100/H200/A100 GPUs (we trained on 8× H200)
-- Python 3.12 + `uv`
-- The model checkpoints (e.g. Qwen3-8B, Qwen3-4B-Base) and training data (DAPO-Math-17k, etc.) downloaded locally
-
-```bash
-git clone <this-repo> EDPO && cd EDPO/verl
-uv venv --python 3.12 && source .venv/bin/activate
-uv pip install -e .
-uv pip install mathruler swanlab
-```
+- 8× H100 / H200 / A100 GPUs (we trained on 8× H200)
+- A working verl + vLLM environment (Python 3.10+, with `mathruler` and `swanlab` installed)
+- Model checkpoints (Qwen3-8B / 4B / 4B-Base, …) and training data (DAPO-Math-17k, AIME / AMC / HMMT / Olympiad val sets, …) downloaded locally
 
 ### Step 1 — Render Easy-R1 jinja prompts into verl-compatible parquet (once)
 
@@ -245,18 +222,7 @@ bash examples/branch_adv/run_grpo_branch_adv.sh \
 
 ### Step 3 — Monitor
 
-SwanLab metrics surfaced by EDAS during training:
-
-| Metric | Meaning |
-|---|---|
-| `branch_adv/scale` | Current warmup scale ∈ [0, 1] |
-| `branch_adv/groups_processed` | # groups EDAS touched this step |
-| `branch_adv/branch_b_count` | # mode-collapse groups (K=1) |
-| `branch_adv/branch_c_count` | # healthy-diversity groups (K>1) |
-| `branch_adv/mean_delta` | Mean magnitude of advantage adjustment |
-| `branch_adv/collapse_rate` | branch_b_count / groups_processed |
-
-If `branch_adv_log_path` is set, per-step per-group adjustment details are appended to a JSONL-like log under `${output_path}/${experiment_name}/`.
+During training, EDAS publishes `branch_adv/*` series to SwanLab (warmup scale, # groups processed, branch B/C counts, mean Δ, collapse rate). If `--branch_adv_log_path` is set, per-step per-group adjustment details are appended to a log under `${output_path}/${experiment_name}/`.
 
 ---
 
