@@ -6,13 +6,13 @@
 
 <p align="center">
   <a href="https://arxiv.org/abs/2605.17333">
-    <img src="https://img.shields.io/badge/arXiv-2605.17333-B31B1B.svg?style=for-the-badge&logo=arxiv&logoColor=white" alt="arXiv" />
+    <img src="https://img.shields.io/badge/-ARXIV-B31B1B.svg?style=for-the-badge&logo=arxiv&logoColor=white&labelColor=B31B1B" alt="arXiv" />
   </a>
   &nbsp;
-  <img src="https://img.shields.io/badge/%F0%9F%A4%97%20HF-Coming%20Soon-FFD21E.svg?style=for-the-badge&labelColor=4B4B4B" alt="HF Datasets and Weights — Coming Soon" />
+  <img src="https://img.shields.io/badge/Datasets%20and%20Weights-COMING%20SOON-D4A017.svg?style=for-the-badge&logo=huggingface&logoColor=white&labelColor=4B4B4B" alt="Datasets and Weights — Coming Soon" />
   &nbsp;
   <a href="https://github.com/today-still-sleep-early/EDAS">
-    <img src="https://img.shields.io/badge/Code-GitHub-1F6FEB.svg?style=for-the-badge&logo=github&logoColor=white&labelColor=1F6FEB" alt="Code" />
+    <img src="https://img.shields.io/badge/-CODE-1F6FEB.svg?style=for-the-badge&logo=github&logoColor=white&labelColor=1F6FEB" alt="Code" />
   </a>
 </p>
 
