@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/%F0%9F%A4%97%20HF-Coming%20Soon-FFD21E.svg?style=for-the-badge&labelColor=4B4B4B" alt="HF Datasets and Weights — Coming Soon" />
   &nbsp;
   <a href="https://github.com/today-still-sleep-early/EDAS">
-    <img src="https://img.shields.io/badge/Code-GitHub-181717.svg?style=for-the-badge&logo=github&logoColor=white" alt="Code" />
+    <img src="https://img.shields.io/badge/Code-GitHub-1F6FEB.svg?style=for-the-badge&logo=github&logoColor=white&labelColor=1F6FEB" alt="Code" />
   </a>
 </p>
 
