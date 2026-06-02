@@ -1,11 +1,18 @@
 <h1 align="center">EDAS: Error Diversity Advantage Shaping for RLVR</h1>
 
 <p align="center">
+  <i>Leveraging Error Diversity in Group Rollouts for Reinforcement Learning</i>
+</p>
+
+<p align="center">
   <a href="https://arxiv.org/abs/2605.17333">
-    <img src="https://img.shields.io/badge/%E2%9A%94%EF%B8%8F-arXiv-B31B1B?style=for-the-badge&labelColor=B31B1B" alt="arXiv" />
+    <img src="https://img.shields.io/badge/arXiv-2605.17333-B31B1B.svg?style=for-the-badge&logo=arxiv&logoColor=white" alt="arXiv" />
   </a>
+  &nbsp;
+  <img src="https://img.shields.io/badge/%F0%9F%A4%97%20HF-Coming%20Soon-FFD21E.svg?style=for-the-badge&labelColor=4B4B4B" alt="HF Datasets and Weights — Coming Soon" />
+  &nbsp;
   <a href="https://github.com/today-still-sleep-early/EDAS">
-    <img src="https://img.shields.io/badge/GitHub-Code-1F6FEB?style=for-the-badge&logo=github&logoColor=white&labelColor=1F6FEB" alt="Code" />
+    <img src="https://img.shields.io/badge/Code-GitHub-181717.svg?style=for-the-badge&logo=github&logoColor=white" alt="Code" />
   </a>
 </p>
 
@@ -160,8 +167,6 @@ We implement EDAS on top of the [verl](https://github.com/verl-project/verl) fra
 | `algorithm.branch_adv_beta` | `0.2` (`0.3` in DAPO script) | Branch B collapse penalty, recommended `[0.1, 0.5]` |
 | `algorithm.branch_adv_kappa` | `2.0` | κ-clip margin, must be `>1`; larger = more conservative |
 | `algorithm.branch_adv_log_path` | `null` | Relative to `trainer.default_local_dir`; per-step adjustment log |
-| `algorithm.branch_adv_warmup_start` | `0` | Steps before EDAS engages (scale = 0 prior) |
-| `algorithm.branch_adv_warmup_steps` | `0` | Linear ramp length once warmup_start reached |
 
 ---
 
@@ -212,21 +217,6 @@ bash examples/branch_adv/run_dapo_branch_adv.sh \
   --swanlab_project edas-math --swanlab_mode cloud
 ```
 
-Or, for plain GRPO + EDAS:
-
-```bash
-bash examples/branch_adv/run_grpo_branch_adv.sh \
-  --model_path /path/to/Qwen/Qwen3-8B \
-  --train_data /path/to/DAPO-Math-17k-Processed/train.formatted.parquet \
-  --val_data   /path/to/val_merge/val_merged.formatted.parquet \
-  --task_name  qwen3_8b_grpo_edas \
-  --output_path ./ckpt \
-  --gpus 8 --max_prompt_length 2048 --max_response_length 8192 \
-  --branch_adv_enabled True \
-  --branch_adv_alpha 0.4 --branch_adv_beta 0.2 --branch_adv_kappa 2.0 \
-  --swanlab_project edas-math --swanlab_mode cloud
-```
-
 ### Step 3 — Monitor
 
 During training, EDAS publishes `branch_adv/*` series to SwanLab (warmup scale, # groups processed, branch B/C counts, mean Δ, collapse rate). If `--branch_adv_log_path` is set, per-step per-group adjustment details are appended to a log under `${output_path}/${experiment_name}/`.
@@ -235,18 +225,18 @@ During training, EDAS publishes `branch_adv/*` series to SwanLab (warmup scale, 
 
 ## 📐 Hyperparameter recipe (used in paper)
 
-| Hparam | Math (all 3 models) | Code (Qwen3-4B) |
-|---|---|---|
-| α (diversity gain) | 0.4 | 0.4 |
-| β (collapse penalty) | 0.2 (DAPO 0.3) | 0.2 |
-| κ (clip margin) | 2.0 | 2.0 |
-| rollout n | 10 | 10 |
-| train batch size (prompts) | 256 | 256 |
-| max_prompt_length | 2048 | 2048 |
-| max_response_length | 8192–10240 | 8192 |
-| LR (actor) | 1e-6 | 1e-6 |
-| ppo_mini_batch | 64 | 64 |
-| GPUs | 8× H200 | 8× H200 |
+| Hparam | Math (all 3 models) |
+|---|---|
+| α (diversity gain) | 0.4 |
+| β (collapse penalty) | 0.2 (DAPO 0.3) |
+| κ (clip margin) | 2.0 |
+| rollout n | 10 |
+| train batch size (prompts) | 256 |
+| max_prompt_length | 2048 |
+| max_response_length | 8192–10240 |
+| LR (actor) | 1e-6 |
+| ppo_mini_batch | 64 |
+| GPUs | 8× H200 |
 
 ---
 
