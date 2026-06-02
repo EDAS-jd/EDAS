@@ -129,6 +129,7 @@ ENABLE_LLM_JUDGE="${ENABLE_LLM_JUDGE:-True}"
 VAL_TEMPERATURE=0.7
 VAL_TOP_P=0.8
 VAL_TOP_K=20
+VAL_PRESENCE_PENALTY=1.5
 VAL_N=1
 
 TOTAL_EPOCHS=2
@@ -162,6 +163,7 @@ Usage:
     [--branch_adv_log_path <path>] \\
     [--reward_fn_path <path>] [--reward_fn_name <name>] [--reward_manager batch|naive|dapo|prime] \\
     [--enable_llm_judge True|False] \\
+    [--val_presence_penalty <float>] \\
     [--llm_judge_host <ip>] [--llm_judge_ports <spec>] [--llm_judge_model <path>] \\
     [--llm_judge_endpoint <path>] [--llm_judge_timeout <sec>] \\
     [--llm_judge_max_retries <int>] [--llm_judge_max_workers <int>] [--llm_judge_max_tokens <int>] \\
@@ -196,6 +198,7 @@ while [[ $# -gt 0 ]]; do
     --enable_dynamic_max_tokens) ENABLE_DYNAMIC_MAX_TOKENS="$2"; shift 2 ;;
     --penalty_max_length) PENALTY_MAX_LENGTH="$2"; shift 2 ;;
     --overlong_buffer_length) OVERLONG_BUFFER_LENGTH="$2"; shift 2 ;;
+    --val_presence_penalty) VAL_PRESENCE_PENALTY="$2"; shift 2 ;;
 
     --actor_ulysses) ACTOR_ULYSSES="$2"; shift 2 ;;
     --critic_ulysses) shift 2 ;;        # accepted for parity, ignored
@@ -241,6 +244,12 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "${SWANLAB_MODE}" == "cloud" && -z "${SWANLAB_API_KEY}" ]]; then
+  echo "[ERROR] --swanlab_mode cloud requires --swanlab_api_key or SWANLAB_API_KEY."
+  echo "        Use --swanlab_mode offline if you do not want to log to SwanLab cloud."
+  exit 1
+fi
 
 export SWANLAB_API_KEY
 export SWANLAB_PROJECT
@@ -377,6 +386,7 @@ PY_ARGS=(
   actor_rollout_ref.rollout.val_kwargs.temperature=${VAL_TEMPERATURE}
   actor_rollout_ref.rollout.val_kwargs.top_p=${VAL_TOP_P}
   actor_rollout_ref.rollout.val_kwargs.top_k=${VAL_TOP_K}
+  actor_rollout_ref.rollout.val_kwargs.presence_penalty=${VAL_PRESENCE_PENALTY}
   actor_rollout_ref.rollout.val_kwargs.n=${VAL_N}
   actor_rollout_ref.rollout.val_kwargs.do_sample=True
 

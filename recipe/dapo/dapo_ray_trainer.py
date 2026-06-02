@@ -74,6 +74,23 @@ def _write_length_log(
         pass
 
 
+def _extend_numeric_reward_metrics(metrics: dict, reward_extra_infos_dict: dict | None) -> None:
+    if not reward_extra_infos_dict:
+        return
+    for key, values in reward_extra_infos_dict.items():
+        if key == "answer_pred":
+            continue
+        if isinstance(values, np.ndarray):
+            values = values.tolist()
+        elif not isinstance(values, (list, tuple)):
+            values = [values]
+        try:
+            np.asarray(values, dtype=np.float32)
+        except (TypeError, ValueError):
+            continue
+        metrics[key].extend(values)
+
+
 def _compute_passrate_metrics(
     uid_list,
     accuracies,
@@ -332,6 +349,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                 if hasattr(self.actor_rollout_wg, "async_calls_finalize_fn_exec"):
                     self.actor_rollout_wg.async_calls_finalize_fn_exec(blocking=False)
                 metrics = {}
+                reward_metrics_lst = defaultdict(list)
 
                 with marked_timer("start_profile", timing_raw):
                     self._start_profiling(
@@ -438,6 +456,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                             new_batch.non_tensor_batch.update(
                                 {k: np.array(v) for k, v in reward_extra_infos_dict.items()}
                             )
+                            _extend_numeric_reward_metrics(reward_metrics_lst, reward_extra_infos_dict)
 
                         # ── EDAS debug records: passrate + group_error_stats ──
                         # Both are best-effort, fire whenever `accuracy` is in the reward
@@ -723,6 +742,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                 metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
                 timing_raw = defaultdict(float)  # clear timing
 
+                metrics.update({f"reward/{k}": v for k, v in reduce_metrics(reward_metrics_lst).items()})
                 metrics["train/num_gen_batches"] = num_gen_batches
                 batch = None
                 num_prompt_in_batch = 0

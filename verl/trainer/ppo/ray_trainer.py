@@ -575,6 +575,7 @@ class RayPPOTrainer:
     def _validate(self, merged: bool = False):
         data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)
+        length_metrics_lst: dict[str, list] = defaultdict(list)
 
         # Lists to collect samples for the table
         sample_inputs = []
@@ -669,6 +670,9 @@ class RayPPOTrainer:
 
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
 
+            for key, value in self._compute_easy_r1_val_length_metrics(test_batch).items():
+                length_metrics_lst[key].append(value)
+
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
         # dump generations
@@ -693,11 +697,14 @@ class RayPPOTrainer:
                 "sample_uids": sample_uids,
                 "sample_turns": sample_turns,
                 "reward_extra_infos_dict": reward_extra_infos_dict,
+                "length_metrics_lst": length_metrics_lst,
             }
         data_sources = np.concatenate(data_source_lst, axis=0)
-        return self._val_metrics_update(data_sources, sample_uids, reward_extra_infos_dict, sample_turns)
+        return self._val_metrics_update(data_sources, sample_uids, reward_extra_infos_dict, sample_turns, length_metrics_lst)
 
-    def _val_metrics_update(self, data_sources, sample_uids, reward_extra_infos_dict, sample_turns):
+    def _val_metrics_update(
+        self, data_sources, sample_uids, reward_extra_infos_dict, sample_turns, length_metrics_lst=None
+    ):
         data_src2var2metric2val = process_validation_metrics(data_sources, sample_uids, reward_extra_infos_dict)
         metric_dict = {}
         for data_source, var2metric2val in data_src2var2metric2val.items():
@@ -722,15 +729,122 @@ class RayPPOTrainer:
             metric_dict["val-aux/num_turns/max"] = sample_turns.max()
             metric_dict["val-aux/num_turns/mean"] = sample_turns.mean()
 
+        metric_dict.update(
+            self._easy_r1_val_metric_aliases(data_sources, reward_extra_infos_dict, length_metrics_lst or {})
+        )
+
+        return metric_dict
+
+    @staticmethod
+    def _compute_easy_r1_val_length_metrics(batch: DataProto) -> dict[str, Any]:
+        if "attention_mask" not in batch.batch or "response_mask" not in batch.batch:
+            return {}
+
+        attention_mask = batch.batch["attention_mask"]
+        response_mask = batch.batch["response_mask"]
+
+        if response_mask.size(-1) == attention_mask.size(-1):
+            prompt_mask = attention_mask.bool() & (~response_mask.bool())
+            prompt_length = prompt_mask.sum(-1).float()
+            response_length = response_mask.sum(-1).float()
+            max_prompt_length = torch.max(prompt_length).detach().item()
+            max_response_length = torch.max(response_length).detach().item()
+        else:
+            response_length = response_mask.sum(-1).float()
+            prompt_length = attention_mask.sum(-1).float() - response_length
+            max_response_length = float(response_mask.size(-1))
+            max_prompt_length = float(attention_mask.size(-1) - response_mask.size(-1))
+
+        return {
+            "response_length/mean": torch.mean(response_length).detach().item(),
+            "response_length/max": max_response_length,
+            "response_length/min": torch.min(response_length).detach().item(),
+            "response_length/clip_ratio": torch.eq(response_length, max_response_length).float().mean().detach().item()
+            if max_response_length > 0
+            else 0.0,
+            "prompt_length/mean": torch.mean(prompt_length).detach().item(),
+            "prompt_length/max": max_prompt_length,
+            "prompt_length/min": torch.min(prompt_length).detach().item(),
+            "prompt_length/clip_ratio": torch.eq(prompt_length, max_prompt_length).float().mean().detach().item()
+            if max_prompt_length > 0
+            else 0.0,
+        }
+
+    @staticmethod
+    def _mean_numeric(values) -> float | None:
+        if values is None or len(values) == 0:
+            return None
+        try:
+            arr = np.asarray(values, dtype=np.float32).reshape(-1)
+        except (TypeError, ValueError):
+            return None
+        if arr.size == 0:
+            return None
+        return float(arr.mean())
+
+    def _easy_r1_val_metric_aliases(self, data_sources, reward_extra_infos_dict, length_metrics_lst) -> dict[str, float]:
+        metric_dict: dict[str, float] = {}
+
+        reward_score = self._mean_numeric(reward_extra_infos_dict.get("reward", []))
+        if reward_score is not None:
+            metric_dict["val/reward_score"] = reward_score
+
+        reward_metrics = {}
+        for key, values in reward_extra_infos_dict.items():
+            if self._mean_numeric(values) is not None:
+                reward_metrics[key] = values
+        metric_dict.update({f"val/{key}_reward": value for key, value in reduce_metrics(reward_metrics).items()})
+
+        length_metrics = {}
+        for key, values in length_metrics_lst.items():
+            if self._mean_numeric(values) is not None:
+                length_metrics[key] = values
+        metric_dict.update({f"val_{key}": value for key, value in reduce_metrics(length_metrics).items()})
+
+        acc_values = reward_extra_infos_dict.get("accuracy", None)
+        if acc_values is None:
+            acc_values = reward_extra_infos_dict.get("acc", None)
+        if acc_values is None:
+            return metric_dict
+
+        try:
+            acc_arr = np.asarray(acc_values, dtype=np.float32).reshape(-1)
+        except (TypeError, ValueError):
+            return metric_dict
+
+        data_sources_arr = np.asarray(data_sources, dtype=object).reshape(-1)
+        if data_sources_arr.size != acc_arr.size:
+            return metric_dict
+
+        for source in sorted(set(data_sources_arr.tolist()), key=str):
+            mask = data_sources_arr == source
+            if not mask.any():
+                continue
+            source_key = str(source).strip() or "unknown"
+            source_key = source_key.replace("/", "_").replace(" ", "_")
+            metric_dict[f"val/source_accuracy/{source_key}"] = float(acc_arr[mask].mean())
+
         return metric_dict
 
     def _merge_validation_results(self, result_a, result_b):
         if result_a is None and result_b is None:
             return {}
         if result_a is None:
-            result_a = {"data_sources": [], "sample_uids": [], "sample_turns": [], "reward_extra_infos_dict": {}}
+            result_a = {
+                "data_sources": [],
+                "sample_uids": [],
+                "sample_turns": [],
+                "reward_extra_infos_dict": {},
+                "length_metrics_lst": {},
+            }
         if result_b is None:
-            result_b = {"data_sources": [], "sample_uids": [], "sample_turns": [], "reward_extra_infos_dict": {}}
+            result_b = {
+                "data_sources": [],
+                "sample_uids": [],
+                "sample_turns": [],
+                "reward_extra_infos_dict": {},
+                "length_metrics_lst": {},
+            }
 
         if not result_a.get("data_sources") and not result_b.get("data_sources"):
             return {}
@@ -746,7 +860,16 @@ class RayPPOTrainer:
             list_b = result_b["reward_extra_infos_dict"].get(key, [])
             reward_extra_infos_dict[key] = list_a + list_b
 
-        return self._val_metrics_update(data_sources, sample_uids, reward_extra_infos_dict, sample_turns)
+        length_metrics_lst = {}
+        all_length_keys = set(result_a.get("length_metrics_lst", {}).keys()) | set(
+            result_b.get("length_metrics_lst", {}).keys()
+        )
+        for key in all_length_keys:
+            list_a = result_a.get("length_metrics_lst", {}).get(key, [])
+            list_b = result_b.get("length_metrics_lst", {}).get(key, [])
+            length_metrics_lst[key] = list_a + list_b
+
+        return self._val_metrics_update(data_sources, sample_uids, reward_extra_infos_dict, sample_turns, length_metrics_lst)
 
     def init_workers(self):
         """Initialize distributed training workers using Ray backend.

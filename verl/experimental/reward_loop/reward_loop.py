@@ -136,6 +136,9 @@ class RewardLoopWorker:
         )
 
     async def compute_score_batch(self, data: DataProto) -> list[dict]:
+        if hasattr(self.reward_manager, "run_batch"):
+            return await self.reward_manager.run_batch(data)
+
         tasks = []
         for i in range(len(data)):
             tasks.append(asyncio.create_task(self.compute_score(data[i : i + 1])))

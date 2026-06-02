@@ -177,20 +177,24 @@ class ToolAgentLoop(AgentLoopBase):
             multi_modal_data["videos"] = agent_data.video_data
         if agent_data.audio_data is not None:
             multi_modal_data["audios"] = agent_data.audio_data
+        if self.rollout_config.get("enable_dynamic_max_tokens", False):
+            response_limit = max(0, self.prompt_length + self.response_length - len(prompt_ids))
+        else:
+            response_limit = self.response_length
 
         output: AgentLoopOutput = AgentLoopOutput(
             prompt_ids=prompt_ids,
-            response_ids=response_ids[: self.response_length],
-            response_mask=agent_data.response_mask[: self.response_length],
+            response_ids=response_ids[:response_limit],
+            response_mask=agent_data.response_mask[:response_limit],
             multi_modal_data=multi_modal_data,
             mm_processor_kwargs=agent_data.mm_processor_kwargs,
-            response_logprobs=agent_data.response_logprobs[: self.response_length]
+            response_logprobs=agent_data.response_logprobs[:response_limit]
             if agent_data.response_logprobs
             else None,
             num_turns=agent_data.user_turns + agent_data.assistant_turns + 1,
             metrics=agent_data.metrics,
             routed_experts=(
-                agent_data.routed_experts[: len(prompt_ids) + self.response_length]
+                agent_data.routed_experts[: len(prompt_ids) + response_limit]
                 if agent_data.routed_experts is not None
                 else None
             ),

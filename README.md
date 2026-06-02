@@ -1,8 +1,15 @@
-# EDAS — Error Diversity Advantage Shaping for RLVR
+<h1 align="center">EDAS: Error Diversity Advantage Shaping for RLVR</h1>
 
-> Reference implementation of **EDAS** (Error Diversity Advantage Shaping) built on top of the [verl](https://github.com/verl-project/verl) RLHF / RLVR framework.
->
-> 📄 **Paper:** *Leveraging Error Diversity in Group Rollouts for Reinforcement Learning* — [arXiv:2605.17333](https://arxiv.org/abs/2605.17333)
+<p align="center">
+  <a href="https://arxiv.org/abs/2605.17333">
+    <img src="https://img.shields.io/badge/%E2%9A%94%EF%B8%8F-arXiv-B31B1B?style=for-the-badge&labelColor=B31B1B" alt="arXiv" />
+  </a>
+  <a href="https://github.com/today-still-sleep-early/EDAS">
+    <img src="https://img.shields.io/badge/GitHub-Code-1F6FEB?style=for-the-badge&logo=github&logoColor=white&labelColor=1F6FEB" alt="Code" />
+  </a>
+</p>
+
+This repository contains the reference implementation of **EDAS (Error Diversity Advantage Shaping)**, an RLVR framework that reshapes per-sample advantages of incorrect trajectories based on intra-group error diversity during reinforcement learning training for LLM reasoning. Built on top of the [verl](https://github.com/verl-project/verl) RLHF / RLVR framework.
 
 <p align="center">
   <img src="assets/edas/framework.png" width="92%" alt="EDAS framework overview" />

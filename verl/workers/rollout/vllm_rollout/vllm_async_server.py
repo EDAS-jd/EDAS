@@ -467,29 +467,26 @@ class vLLMHttpServer:
                 f"({self.config.max_model_len})."
             )
 
-        # Determine max_tokens from sampling_params or use configured response_length as default
-        if "max_tokens" in sampling_params:
+        # Determine max_tokens. In EDAS dynamic mode, match the original
+        # Easy-R1 behavior: short prompts can reuse unused prompt budget, so a
+        # 2k/8k run can generate up to roughly 10k tokens. This intentionally
+        # overrides request-level max_tokens/max_new_tokens, which are usually
+        # populated from the static response_length by the async rollout client.
+        if self.config.get("enable_dynamic_max_tokens", False):
+            sampling_params.pop("max_tokens", None)
+            sampling_params.pop("max_new_tokens", None)
+            max_tokens = self.config.prompt_length + self.config.response_length - len(prompt_ids)
+        elif "max_tokens" in sampling_params:
             max_tokens = sampling_params.pop("max_tokens")
         elif "max_new_tokens" in sampling_params:
             # support sglang-style 'max_new_tokens' param
             max_tokens = sampling_params.pop("max_new_tokens")
         else:
-            # Default to a calculation that considers configured lengths
-            # Cap max_tokens by response_length to ensure tensor alignment,
-            # and by remaining budget to prevent OOM in multi-turn rollouts.
-            #
-            # When enable_dynamic_max_tokens=True (EDAS behavior),
-            # drop the response_length cap AND raise the budget ceiling to
-            # max_model_len so a short prompt can use the full remaining
-            # context window. This lets short prompts use the full remaining context window
-            # where dynamic_max = max_model_len - p_len.
-            if self.config.get("enable_dynamic_max_tokens", False):
-                max_tokens = max_possible_tokens
-            else:
-                max_tokens = min(
-                    self.config.response_length,
-                    self.config.prompt_length + self.config.response_length - len(prompt_ids),
-                )
+            # Default to a calculation that considers configured lengths.
+            max_tokens = min(
+                self.config.response_length,
+                self.config.prompt_length + self.config.response_length - len(prompt_ids),
+            )
 
         # Clamp max_tokens to the valid range [0, max_possible_tokens]
         max_tokens = max(0, min(max_tokens, max_possible_tokens))

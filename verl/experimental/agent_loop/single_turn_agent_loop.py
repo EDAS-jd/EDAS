@@ -69,14 +69,18 @@ class SingleTurnAgentLoop(AgentLoopBase):
         if metrics.get("num_preempted") is None:
             metrics["num_preempted"] = output.num_preempted if output.num_preempted is not None else -1
         response_mask = [1] * len(output.token_ids)
+        if self.rollout_config.get("enable_dynamic_max_tokens", False):
+            response_limit = max(0, self.prompt_length + self.response_length - len(prompt_ids))
+        else:
+            response_limit = self.response_length
 
         output: AgentLoopOutput = AgentLoopOutput(
             prompt_ids=prompt_ids,
-            response_ids=output.token_ids[: self.response_length],
-            response_mask=response_mask[: self.response_length],
-            response_logprobs=output.log_probs[: self.response_length] if output.log_probs else None,
+            response_ids=output.token_ids[:response_limit],
+            response_mask=response_mask[:response_limit],
+            response_logprobs=output.log_probs[:response_limit] if output.log_probs else None,
             routed_experts=(
-                output.routed_experts[: len(prompt_ids) + self.response_length]
+                output.routed_experts[: len(prompt_ids) + response_limit]
                 if output.routed_experts is not None
                 else None
             ),
